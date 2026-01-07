@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components import conversation
 from homeassistant.components.conversation import AbstractConversationAgent
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import intent, llm
 from homeassistant.util import ulid
 
@@ -74,24 +75,24 @@ class AGUIAgentConversationEntity(
         messages = self._conversation_history.get(conversation_id, [])
 
         # Get Home Assistant LLM API
+        llm_context = llm.LLMContext(
+            platform=DOMAIN,
+            context=user_input.context,
+            language=user_input.language or "en",
+            assistant=conversation.DOMAIN,
+            device_id=user_input.device_id,
+        )
         try:
             llm_api = await llm.async_get_api(
                 self.hass,
                 DOMAIN,
-                llm.LLMContext(
-                    platform=DOMAIN,
-                    context=user_input.context,
-                    user_prompt=user_input.text,
-                    language=user_input.language or "en",
-                    assistant=conversation.DOMAIN,
-                    device_id=user_input.device_id,
-                ),
+                llm_context,
             )
-        except llm.NoAPIAvailable:
-            LOGGER.error("No LLM API available")
+        except HomeAssistantError:
+            LOGGER.exception("Error getting LLM API")
             return _error_response(
                 conversation_id,
-                "No LLM API available. Please check your configuration.",
+                "Error getting LLM API. Please check your configuration.",
             )
 
         # Get available tools from Home Assistant
