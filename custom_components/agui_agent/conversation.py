@@ -85,7 +85,7 @@ class AGUIAgentConversationEntity(
         try:
             llm_api = await llm.async_get_api(
                 self.hass,
-                DOMAIN,
+                llm.LLM_API_ASSIST,
                 llm_context,
             )
         except HomeAssistantError:
