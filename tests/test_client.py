@@ -504,3 +504,256 @@ class TestAGUIClientRemoteSSE:
             assert len(events) == 1
             assert isinstance(events[0], RunErrorEvent)
             assert "Connection" in events[0].message
+
+
+class TestAGUIClientToolExecutionLoop:
+    """Tests for the tool execution loop in AGUIClient.run()."""
+
+    @pytest.fixture
+    def mock_tool_ctx(self) -> ToolExecutionContext:
+        """Create a mock tool execution context."""
+        return ToolExecutionContext(
+            hass=MagicMock(),
+            ha_llm_api=MagicMock(),
+        )
+
+    @pytest.mark.asyncio
+    async def test_run_no_tools_single_iteration(
+        self, mock_tool_ctx: ToolExecutionContext
+    ) -> None:
+        """Test that run() completes in one iteration when no tools are called."""
+        client = AGUIClient(endpoint="http://example.com/agent")
+        call_count = 0
+
+        async def mock_fetch_events(_run_input):
+            nonlocal call_count
+            call_count += 1
+            # Yield text response only (no tool calls)
+            yield RunStartedEvent(
+                type=EventType.RUN_STARTED, run_id="r1", thread_id="t1"
+            )
+            yield TextMessageContentEvent(
+                type=EventType.TEXT_MESSAGE_CONTENT, message_id="m1", delta="Hello!"
+            )
+            yield RunFinishedEvent(
+                type=EventType.RUN_FINISHED, run_id="r1", thread_id="t1"
+            )
+
+        with patch.object(client, "_fetch_remote_events", mock_fetch_events):
+            result = await client.run(
+                thread_id="t1",
+                run_id="r1",
+                messages=[{"role": "user", "content": "Hi", "id": "u1"}],
+                tools=[],
+                context={},
+                tool_ctx=mock_tool_ctx,
+            )
+
+        assert call_count == 1
+        assert result.response_text == "Hello!"
+        assert len(result.tool_results) == 0
+
+    @pytest.mark.asyncio
+    async def test_run_with_tool_calls_loops(
+        self, mock_tool_ctx: ToolExecutionContext
+    ) -> None:
+        """Test that run() loops when tools are executed, sending results back."""
+        from ag_ui.core import Tool
+
+        client = AGUIClient(endpoint="http://example.com/agent")
+        call_count = 0
+
+        async def mock_fetch_events(_run_input):
+            nonlocal call_count
+            call_count += 1
+
+            if call_count == 1:
+                # First call: agent requests a tool
+                yield RunStartedEvent(
+                    type=EventType.RUN_STARTED, run_id="r1", thread_id="t1"
+                )
+                yield ToolCallStartEvent(
+                    type=EventType.TOOL_CALL_START,
+                    tool_call_id="tc-1",
+                    tool_call_name="HassTurnOn",
+                )
+                yield ToolCallArgsEvent(
+                    type=EventType.TOOL_CALL_ARGS,
+                    tool_call_id="tc-1",
+                    delta='{"entity_id": "light.kitchen"}',
+                )
+                yield ToolCallEndEvent(
+                    type=EventType.TOOL_CALL_END, tool_call_id="tc-1"
+                )
+                yield RunFinishedEvent(
+                    type=EventType.RUN_FINISHED, run_id="r1", thread_id="t1"
+                )
+            else:
+                # Second call: agent receives tool result and responds
+                yield RunStartedEvent(
+                    type=EventType.RUN_STARTED, run_id="r1", thread_id="t1"
+                )
+                yield TextMessageContentEvent(
+                    type=EventType.TEXT_MESSAGE_CONTENT,
+                    message_id="m1",
+                    delta="I turned on the kitchen light.",
+                )
+                yield RunFinishedEvent(
+                    type=EventType.RUN_FINISHED, run_id="r1", thread_id="t1"
+                )
+
+        with (
+            patch.object(client, "_fetch_remote_events", mock_fetch_events),
+            patch("custom_components.agui_agent.client.execute_tool") as mock_execute,
+        ):
+            mock_execute.return_value = ToolCallResult(
+                tool_call_id="tc-1",
+                tool_name="HassTurnOn",
+                content='{"success": true}',
+                status="success",
+            )
+
+            result = await client.run(
+                thread_id="t1",
+                run_id="r1",
+                messages=[{"role": "user", "content": "Turn on the kitchen light", "id": "u1"}],
+                tools=[
+                    Tool(
+                        name="HassTurnOn",
+                        description="Turn on a device",
+                        parameters={"type": "object", "properties": {}},
+                    )
+                ],
+                context={},
+                tool_ctx=mock_tool_ctx,
+            )
+
+        # Should have made 2 calls: first for tool request, second after tool result
+        assert call_count == 2
+        assert result.response_text == "I turned on the kitchen light."
+        assert len(result.tool_results) == 1
+        assert result.tool_results[0].tool_name == "HassTurnOn"
+
+    @pytest.mark.asyncio
+    async def test_run_includes_tool_result_in_second_request(
+        self, mock_tool_ctx: ToolExecutionContext
+    ) -> None:
+        """Test that tool results are included in messages for subsequent requests."""
+        from ag_ui.core import Tool
+
+        client = AGUIClient(endpoint="http://example.com/agent")
+        captured_run_inputs = []
+
+        async def mock_fetch_events(run_input):
+            captured_run_inputs.append(run_input)
+
+            if len(captured_run_inputs) == 1:
+                # First call: request tool
+                yield ToolCallStartEvent(
+                    type=EventType.TOOL_CALL_START,
+                    tool_call_id="tc-1",
+                    tool_call_name="HassGetState",
+                )
+                yield ToolCallArgsEvent(
+                    type=EventType.TOOL_CALL_ARGS,
+                    tool_call_id="tc-1",
+                    delta='{"entity_id": "sensor.temp"}',
+                )
+                yield ToolCallEndEvent(
+                    type=EventType.TOOL_CALL_END, tool_call_id="tc-1"
+                )
+            else:
+                # Second call: respond with text
+                yield TextMessageContentEvent(
+                    type=EventType.TEXT_MESSAGE_CONTENT,
+                    message_id="m1",
+                    delta="Temperature is 72°F",
+                )
+
+        with (
+            patch.object(client, "_fetch_remote_events", mock_fetch_events),
+            patch("custom_components.agui_agent.client.execute_tool") as mock_execute,
+        ):
+            mock_execute.return_value = ToolCallResult(
+                tool_call_id="tc-1",
+                tool_name="HassGetState",
+                content='{"state": "72"}',
+                status="success",
+            )
+
+            await client.run(
+                thread_id="t1",
+                run_id="r1",
+                messages=[{"role": "user", "content": "What's the temp?", "id": "u1"}],
+                tools=[
+                    Tool(
+                        name="HassGetState",
+                        description="Get entity state",
+                        parameters={"type": "object", "properties": {}},
+                    )
+                ],
+                context={},
+                tool_ctx=mock_tool_ctx,
+            )
+
+        # Verify second request includes tool result
+        assert len(captured_run_inputs) == 2
+        second_request = captured_run_inputs[1]
+        # Find the tool message in the second request
+        tool_messages = [m for m in second_request.messages if m.role == "tool"]
+        assert len(tool_messages) == 1
+        assert tool_messages[0].tool_call_id == "tc-1"
+        assert '{"state": "72"}' in tool_messages[0].content
+
+    @pytest.mark.asyncio
+    async def test_run_max_iterations_prevents_infinite_loop(
+        self, mock_tool_ctx: ToolExecutionContext
+    ) -> None:
+        """Test that run() stops after max_iterations to prevent infinite loops."""
+        from ag_ui.core import Tool
+
+        client = AGUIClient(endpoint="http://example.com/agent")
+        call_count = 0
+
+        async def mock_fetch_events(_run_input):
+            nonlocal call_count
+            call_count += 1
+            # Always request another tool (would loop forever without limit)
+            yield ToolCallStartEvent(
+                type=EventType.TOOL_CALL_START,
+                tool_call_id=f"tc-{call_count}",
+                tool_call_name="SomeTool",
+            )
+            yield ToolCallEndEvent(
+                type=EventType.TOOL_CALL_END, tool_call_id=f"tc-{call_count}"
+            )
+
+        with (
+            patch.object(client, "_fetch_remote_events", mock_fetch_events),
+            patch("custom_components.agui_agent.client.execute_tool") as mock_execute,
+        ):
+            mock_execute.return_value = ToolCallResult(
+                tool_call_id="tc-1",
+                tool_name="SomeTool",
+                content="result",
+                status="success",
+            )
+
+            result = await client.run(
+                thread_id="t1",
+                run_id="r1",
+                messages=[],
+                tools=[
+                    Tool(
+                        name="SomeTool",
+                        description="A tool",
+                        parameters={"type": "object", "properties": {}},
+                    )
+                ],
+                context={},
+                tool_ctx=mock_tool_ctx,
+            )
+
+        # Should stop at max_iterations (10)
+        assert call_count == 10
+        assert len(result.tool_results) == 10

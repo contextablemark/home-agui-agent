@@ -159,37 +159,59 @@ class AGUIClient:
         """
         self._pending_tool_calls.clear()
         response_chunks: list[str] = []
-        tool_results: list[ToolCallResult] = []
+        all_tool_results: list[ToolCallResult] = []
         current_messages = list(messages)
-
-        # Convert messages to AG-UI message objects
-        agui_messages = _convert_to_agui_messages(current_messages)
 
         # Convert context dict to list of Context objects
         context_list = [
             Context(description=str(k), value=str(v)) for k, v in context.items()
         ]
 
-        # Create RunAgentInput
-        run_input = RunAgentInput(
-            thread_id=thread_id,
-            run_id=run_id,
-            messages=agui_messages,
-            tools=tools,
-            context=context_list,
-            state={},
-            forwarded_props=forwarded_props or {},
-        )
+        # Tool execution loop - keep running until no more tools are called
+        max_iterations = 10  # Prevent infinite loops
+        for iteration in range(max_iterations):
+            # Convert messages to AG-UI message objects for this iteration
+            agui_messages = _convert_to_agui_messages(current_messages)
 
-        # Process events from remote agent
-        async for event in self._fetch_remote_events(run_input):
-            await self._process_event(
-                event=event,
-                response_chunks=response_chunks,
-                tool_results=tool_results,
-                current_messages=current_messages,
-                tool_ctx=tool_ctx,
+            # Create RunAgentInput
+            run_input = RunAgentInput(
+                thread_id=thread_id,
+                run_id=run_id,
+                messages=agui_messages,
+                tools=tools,
+                context=context_list,
+                state={},
+                forwarded_props=forwarded_props or {},
             )
+
+            # Track tool results from this iteration
+            iteration_tool_results: list[ToolCallResult] = []
+
+            # Process events from remote agent
+            async for event in self._fetch_remote_events(run_input):
+                await self._process_event(
+                    event=event,
+                    response_chunks=response_chunks,
+                    tool_results=iteration_tool_results,
+                    current_messages=current_messages,
+                    tool_ctx=tool_ctx,
+                )
+
+            all_tool_results.extend(iteration_tool_results)
+
+            # If no tools were executed this iteration, we're done
+            if not iteration_tool_results:
+                LOGGER.debug("No tools executed in iteration %d, finishing", iteration)
+                break
+
+            LOGGER.debug(
+                "Iteration %d: %d tools executed, sending results back to agent",
+                iteration,
+                len(iteration_tool_results),
+            )
+
+            # Tool results are already added to current_messages in _process_event
+            # Loop will continue with updated messages including tool results
 
         response_text = "".join(response_chunks)
         LOGGER.debug(
@@ -200,7 +222,7 @@ class AGUIClient:
         return AGUIClientResult(
             response_text=response_text,
             messages=current_messages,
-            tool_results=tool_results,
+            tool_results=all_tool_results,
         )
 
     async def _fetch_remote_events(
