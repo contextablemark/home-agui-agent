@@ -280,9 +280,14 @@ class AGUIClient:
         """
         event_type: str | None = None
         data_lines: list[str] = []
+        line_count = 0
 
+        LOGGER.debug("Starting to parse SSE stream...")
         async for line_bytes in content:
             line = line_bytes.decode("utf-8").rstrip("\r\n")
+            line_count += 1
+            if line_count <= 20:  # noqa: PLR2004
+                LOGGER.debug("SSE line %d: %s", line_count, line[:100])
 
             if line.startswith("event:"):
                 # New event type
@@ -305,6 +310,8 @@ class AGUIClient:
                 # Reset for next event
                 event_type = None
                 data_lines = []
+
+        LOGGER.debug("SSE stream ended after %d lines", line_count)
 
     def _parse_sse_event(self, event_type_str: str, data: str) -> BaseEvent | None:
         """
