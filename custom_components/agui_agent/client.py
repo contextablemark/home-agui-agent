@@ -191,8 +191,14 @@ class AGUIClient:
                 tool_ctx=tool_ctx,
             )
 
+        response_text = "".join(response_chunks)
+        LOGGER.debug(
+            "Agent run complete. Response text (%d chars): %s",
+            len(response_text),
+            response_text[:200] if response_text else "(empty)",
+        )
         return AGUIClientResult(
-            response_text="".join(response_chunks),
+            response_text=response_text,
             messages=current_messages,
             tool_results=tool_results,
         )
@@ -287,9 +293,15 @@ class AGUIClient:
             elif line == "":
                 # Blank line = end of event
                 if event_type and data_lines:
-                    event = self._parse_sse_event(event_type, "\n".join(data_lines))
+                    data_str = "\n".join(data_lines)
+                    LOGGER.debug(
+                        "SSE event received: %s, data: %s", event_type, data_str[:200]
+                    )
+                    event = self._parse_sse_event(event_type, data_str)
                     if event:
                         yield event
+                    else:
+                        LOGGER.warning("Failed to parse SSE event: %s", event_type)
                 # Reset for next event
                 event_type = None
                 data_lines = []
@@ -360,6 +372,8 @@ class AGUIClient:
 
         elif event_type == EventType.TEXT_MESSAGE_CONTENT:
             if isinstance(event, TextMessageContentEvent):
+                delta = event.delta[:100] if event.delta else ""
+                LOGGER.debug("Text content delta: %s", delta)
                 response_chunks.append(event.delta)
 
         elif event_type == EventType.TEXT_MESSAGE_END:

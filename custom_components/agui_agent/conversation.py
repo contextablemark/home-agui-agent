@@ -151,6 +151,11 @@ class AGUIAgentConversationEntity(
         self._conversation_history[conversation_id] = result.messages
 
         # Build response
+        LOGGER.debug(
+            "Building response with text (%d chars): %s",
+            len(result.response_text) if result.response_text else 0,
+            result.response_text[:200] if result.response_text else "(empty)",
+        )
         response = intent.IntentResponse(language=user_input.language or "en")
         response.async_set_speech(result.response_text)
 
