@@ -1,0 +1,26 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Configure AG-UI Agent",
+                "description": "Connect to a remote AG-UI compatible agent endpoint. For more information, see: https://github.com/ag-ui-protocol/ag-ui",
+                "data": {
+                    "agui_endpoint": "AG-UI Endpoint URL",
+                    "timeout": "Request Timeout (seconds)"
+                },
+                "data_description": {
+                    "agui_endpoint": "The URL of your AG-UI compatible agent server (e.g., http://localhost:8005/agent)",
+                    "timeout": "Maximum time to wait for agent responses"
+                }
+            }
+        },
+        "error": {
+            "invalid_url": "Invalid URL format. Must start with http:// or https://",
+            "cannot_connect": "Unable to connect to the AG-UI endpoint. Please verify the URL is correct and the server is running.",
+            "unknown": "An unexpected error occurred."
+        },
+        "abort": {
+            "already_configured": "This AG-UI endpoint is already configured."
+        }
+    }
+}

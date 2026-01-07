@@ -1,5 +1,5 @@
 {
-    "name": "Integration blueprint",
+    "name": "AG-UI Agent",
     "homeassistant": "2025.2.4",
     "hacs": "2.0.5"
 }
