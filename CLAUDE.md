@@ -78,7 +78,7 @@ tests/
 ## Key Dependencies
 
 From `manifest.json`:
-- `ag-ui-core>=0.1.10` - AG-UI protocol types
+- `ag-ui-protocol>=0.1.10` - AG-UI protocol types (imports as `ag_ui.core`)
 - `voluptuous-openapi>=0.0.5` - Schema conversion
 
 HA dependencies: `conversation`
