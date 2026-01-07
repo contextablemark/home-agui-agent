@@ -218,8 +218,8 @@ class AGUIClient:
             "Accept": "text/event-stream",
         }
 
-        # Serialize RunAgentInput to JSON
-        payload = run_input.model_dump(mode="json")
+        # Serialize RunAgentInput to JSON, excluding None values
+        payload = run_input.model_dump(mode="json", exclude_none=True)
 
         try:
             async with (
