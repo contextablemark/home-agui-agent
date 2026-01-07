@@ -236,6 +236,11 @@ class AGUIClient:
                     headers=headers,
                 ) as response,
             ):
+                LOGGER.debug(
+                    "Remote AG-UI response: status=%d, content_type=%s",
+                    response.status,
+                    response.content_type,
+                )
                 if response.status != HTTPStatus.OK:
                     error_text = await response.text()
                     LOGGER.error(
@@ -250,8 +255,10 @@ class AGUIClient:
                     return
 
                 # Parse SSE stream
+                LOGGER.debug("Starting SSE stream parsing from response.content")
                 async for event in self._parse_sse_stream(response.content):
                     yield event
+                LOGGER.debug("Finished iterating SSE events")
 
         except aiohttp.ClientError as err:
             LOGGER.exception("Failed to connect to remote AG-UI endpoint")
