@@ -225,7 +225,8 @@ class AGUIClient:
         }
 
         # Serialize RunAgentInput to JSON, excluding None values
-        payload = run_input.model_dump(mode="json", exclude_none=True)
+        # Use by_alias=True to get camelCase field names (e.g., forwardedProps)
+        payload = run_input.model_dump(mode="json", exclude_none=True, by_alias=True)
 
         try:
             async with (
@@ -297,23 +298,33 @@ class AGUIClient:
                 LOGGER.debug("SSE line %d: %s", line_count, line[:100])
 
             if line.startswith("event:"):
-                # New event type
+                # Explicit event type
                 event_type = line[6:].strip()
             elif line.startswith("data:"):
                 # Accumulate data (can span multiple lines)
                 data_lines.append(line[5:].strip())
             elif line == "":
                 # Blank line = end of event
-                if event_type and data_lines:
+                if data_lines:
                     data_str = "\n".join(data_lines)
-                    LOGGER.debug(
-                        "SSE event received: %s, data: %s", event_type, data_str[:200]
-                    )
-                    event = self._parse_sse_event(event_type, data_str)
-                    if event:
-                        yield event
-                    else:
-                        LOGGER.warning("Failed to parse SSE event: %s", event_type)
+                    # If no event type from "event:" line, extract from data
+                    if not event_type:
+                        try:
+                            parsed = json.loads(data_str)
+                            event_type = parsed.get("type")
+                        except json.JSONDecodeError:
+                            pass
+                    if event_type:
+                        LOGGER.debug(
+                            "SSE event received: %s, data: %s",
+                            event_type,
+                            data_str[:200],
+                        )
+                        event = self._parse_sse_event(event_type, data_str)
+                        if event:
+                            yield event
+                        else:
+                            LOGGER.warning("Failed to parse SSE event: %s", event_type)
                 # Reset for next event
                 event_type = None
                 data_lines = []
