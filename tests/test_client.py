@@ -616,7 +616,9 @@ class TestAGUIClientToolExecutionLoop:
             result = await client.run(
                 thread_id="t1",
                 run_id="r1",
-                messages=[{"role": "user", "content": "Turn on the kitchen light", "id": "u1"}],
+                messages=[
+                    {"role": "user", "content": "Turn on the kitchen light", "id": "u1"}
+                ],
                 tools=[
                     Tool(
                         name="HassTurnOn",
