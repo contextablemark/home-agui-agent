@@ -1,7 +1,7 @@
 {
   "domain": "agui_agent",
   "name": "AG-UI Agent",
-  "codeowners": [@contextablemark],
+  "codeowners": ["@contextablemark"],
   "config_flow": true,
   "dependencies": ["conversation"],
   "documentation": "https://github.com/contextablemark/home-agui-agent",
