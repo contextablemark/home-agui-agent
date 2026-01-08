@@ -5,6 +5,8 @@
   "config_flow": true,
   "dependencies": ["conversation"],
   "documentation": "https://github.com/contextablemark/home-agui-agent",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/contextablemark/home-agui-agent/issues",
   "requirements": ["ag-ui-protocol>=0.1.10", "voluptuous-openapi>=0.0.5"],
   "version": "0.1.0"
