@@ -77,6 +77,9 @@ class AGUIAgentFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 },
             ),
+            description_placeholders={
+                "ag_ui_url": "https://github.com/ag-ui-protocol/ag-ui",
+            },
             errors=errors,
         )
 
