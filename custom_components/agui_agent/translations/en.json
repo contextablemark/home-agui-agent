@@ -3,7 +3,7 @@
         "step": {
             "user": {
                 "title": "Configure AG-UI Agent",
-                "description": "Connect to a remote AG-UI compatible agent endpoint. For more information, see: https://github.com/ag-ui-protocol/ag-ui",
+                "description": "Connect to a remote [AG-UI]({ag_ui_url}) compatible agent endpoint.",
                 "data": {
                     "agui_endpoint": "AG-UI Endpoint URL",
                     "timeout": "Request Timeout (seconds)"
