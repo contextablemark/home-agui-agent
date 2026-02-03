@@ -6,11 +6,13 @@
                 "description": "Connect to a remote AG-UI compatible agent endpoint. For more information, see: https://github.com/ag-ui-protocol/ag-ui",
                 "data": {
                     "agui_endpoint": "AG-UI Endpoint URL",
-                    "timeout": "Request Timeout (seconds)"
+                    "timeout": "Request Timeout (seconds)",
+                    "bearer_token": "Bearer Token"
                 },
                 "data_description": {
                     "agui_endpoint": "The URL of your AG-UI compatible agent server (e.g., http://localhost:8005/agent)",
-                    "timeout": "Maximum time to wait for agent responses"
+                    "timeout": "Maximum time to wait for agent responses",
+                    "bearer_token": "Optional authentication token for the AG-UI endpoint"
                 }
             }
         },

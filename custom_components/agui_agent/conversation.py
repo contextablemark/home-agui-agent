@@ -48,6 +48,7 @@ class AGUIAgentConversationEntity(
         self._client = AGUIClient(
             endpoint=entry.runtime_data.endpoint,
             timeout=entry.runtime_data.timeout,
+            bearer_token=entry.runtime_data.bearer_token,
         )
         # Conversation state per thread
         self._conversation_history: dict[str, list[dict[str, Any]]] = {}

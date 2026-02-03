@@ -144,6 +144,26 @@ class TestEventTypeMap:
             assert event_type in _EVENT_TYPE_MAP
 
 
+class TestAGUIClientInit:
+    """Tests for AGUIClient initialization."""
+
+    def test_default_bearer_token_is_none(self) -> None:
+        """Test that bearer_token defaults to None."""
+        client = AGUIClient(endpoint="http://example.com")
+        assert client._bearer_token is None
+
+    def test_bearer_token_is_stored(self) -> None:
+        """Test that bearer_token is stored when provided."""
+        token = "my-secret-token"  # noqa: S105
+        client = AGUIClient(endpoint="http://example.com", bearer_token=token)
+        assert client._bearer_token == token
+
+    def test_timeout_is_set(self) -> None:
+        """Test that timeout is properly configured."""
+        client = AGUIClient(endpoint="http://example.com", timeout=60)
+        assert client._timeout.total == 60
+
+
 class TestAGUIClientSSEParsing:
     """Tests for SSE stream parsing."""
 
@@ -368,6 +388,115 @@ class TestAGUIClientRemoteSSE:
             hass=MagicMock(),
             ha_llm_api=MagicMock(),
         )
+
+    @pytest.mark.asyncio
+    async def test_fetch_remote_events_includes_bearer_token(self) -> None:
+        """Test that Authorization header is added when bearer_token is set."""
+        token = "test-token-123"  # noqa: S105
+        client = AGUIClient(endpoint="http://example.com/agent", bearer_token=token)
+
+        sse_lines = [
+            b"event: RUN_FINISHED\n",
+            b'data: {"type": "RUN_FINISHED", "runId": "run-1", "threadId": "t1"}\n',
+            b"\n",
+        ]
+
+        async def async_iter():
+            for line in sse_lines:
+                yield line
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.content.__aiter__ = lambda _self: async_iter()
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=MagicMock())
+        mock_session.post.return_value.__aenter__ = AsyncMock(
+            return_value=mock_response
+        )
+        mock_session.post.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("aiohttp.ClientSession") as mock_client_session:
+            mock_client_session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_client_session.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            from ag_ui.core import RunAgentInput
+
+            run_input = RunAgentInput(
+                thread_id="t1",
+                run_id="r1",
+                messages=[],
+                tools=[],
+                context=[],
+                state={},
+                forwarded_props={},
+            )
+
+            events = []
+            async for event in client._fetch_remote_events(run_input):
+                events.append(event)
+
+            # Verify the post was called with Authorization header
+            mock_session.post.assert_called_once()
+            call_kwargs = mock_session.post.call_args[1]
+            assert "headers" in call_kwargs
+            assert call_kwargs["headers"]["Authorization"] == f"Bearer {token}"
+
+    @pytest.mark.asyncio
+    async def test_fetch_remote_events_no_auth_header_without_token(self) -> None:
+        """Test that no Authorization header is added when bearer_token is None."""
+        client = AGUIClient(endpoint="http://example.com/agent")
+
+        sse_lines = [
+            b"event: RUN_FINISHED\n",
+            b'data: {"type": "RUN_FINISHED", "runId": "run-1", "threadId": "t1"}\n',
+            b"\n",
+        ]
+
+        async def async_iter():
+            for line in sse_lines:
+                yield line
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.content.__aiter__ = lambda _self: async_iter()
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=MagicMock())
+        mock_session.post.return_value.__aenter__ = AsyncMock(
+            return_value=mock_response
+        )
+        mock_session.post.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("aiohttp.ClientSession") as mock_client_session:
+            mock_client_session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_client_session.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            from ag_ui.core import RunAgentInput
+
+            run_input = RunAgentInput(
+                thread_id="t1",
+                run_id="r1",
+                messages=[],
+                tools=[],
+                context=[],
+                state={},
+                forwarded_props={},
+            )
+
+            events = []
+            async for event in client._fetch_remote_events(run_input):
+                events.append(event)
+
+            # Verify the post was called without Authorization header
+            mock_session.post.assert_called_once()
+            call_kwargs = mock_session.post.call_args[1]
+            assert "headers" in call_kwargs
+            assert "Authorization" not in call_kwargs["headers"]
 
     @pytest.mark.asyncio
     async def test_fetch_remote_events_success(self) -> None:
