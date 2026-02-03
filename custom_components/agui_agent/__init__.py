@@ -16,7 +16,14 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 
-from .const import CONF_AGUI_ENDPOINT, CONF_TIMEOUT, DEFAULT_TIMEOUT, DOMAIN, LOGGER
+from .const import (
+    CONF_AGUI_ENDPOINT,
+    CONF_BEARER_TOKEN,
+    CONF_TIMEOUT,
+    DEFAULT_TIMEOUT,
+    DOMAIN,
+    LOGGER,
+)
 
 __all__ = ["DOMAIN", "AGUIAgentConfigEntry", "AGUIAgentData"]
 
@@ -32,6 +39,7 @@ class AGUIAgentData:
 
     endpoint: str
     timeout: int
+    bearer_token: str | None
 
 
 type AGUIAgentConfigEntry = ConfigEntry[AGUIAgentData]
@@ -49,6 +57,7 @@ async def async_setup_entry(
     entry.runtime_data = AGUIAgentData(
         endpoint=entry.data[CONF_AGUI_ENDPOINT],
         timeout=entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
+        bearer_token=entry.data.get(CONF_BEARER_TOKEN),
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

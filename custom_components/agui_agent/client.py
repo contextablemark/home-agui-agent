@@ -118,6 +118,7 @@ class AGUIClient:
         self,
         endpoint: str,
         timeout: int = 120,
+        bearer_token: str | None = None,
     ) -> None:
         """
         Initialize the AG-UI client.
@@ -125,10 +126,12 @@ class AGUIClient:
         Args:
             endpoint: URL of the remote AG-UI agent endpoint.
             timeout: Request timeout in seconds (default: 120).
+            bearer_token: Optional bearer token for authentication.
 
         """
         self._endpoint = endpoint
         self._timeout = aiohttp.ClientTimeout(total=timeout, connect=30)
+        self._bearer_token = bearer_token
         self._pending_tool_calls: dict[str, PendingToolCall] = {}
 
     async def run(  # noqa: PLR0913
@@ -245,6 +248,8 @@ class AGUIClient:
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
         }
+        if self._bearer_token:
+            headers["Authorization"] = f"Bearer {self._bearer_token}"
 
         # Serialize RunAgentInput to JSON, excluding None values
         # Use by_alias=True to get camelCase field names (e.g., forwardedProps)

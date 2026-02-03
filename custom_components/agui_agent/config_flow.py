@@ -9,7 +9,14 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
-from .const import CONF_AGUI_ENDPOINT, CONF_TIMEOUT, DEFAULT_TIMEOUT, DOMAIN, LOGGER
+from .const import (
+    CONF_AGUI_ENDPOINT,
+    CONF_BEARER_TOKEN,
+    CONF_TIMEOUT,
+    DEFAULT_TIMEOUT,
+    DOMAIN,
+    LOGGER,
+)
 
 
 class AGUIAgentFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -32,8 +39,9 @@ class AGUIAgentFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_url"
             else:
                 # Optional: Test endpoint connectivity
+                bearer_token = user_input.get(CONF_BEARER_TOKEN)
                 try:
-                    await self._test_endpoint(endpoint)
+                    await self._test_endpoint(endpoint, bearer_token)
                 except aiohttp.ClientError as ex:
                     LOGGER.warning("Failed to connect to endpoint: %s", ex)
                     errors["base"] = "cannot_connect"
@@ -46,12 +54,16 @@ class AGUIAgentFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(endpoint)
                 self._abort_if_unique_id_configured()
 
+                data = {
+                    CONF_AGUI_ENDPOINT: endpoint,
+                    CONF_TIMEOUT: user_input.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
+                }
+                if bearer_token:
+                    data[CONF_BEARER_TOKEN] = bearer_token
+
                 return self.async_create_entry(
                     title=f"AG-UI Agent ({endpoint})",
-                    data={
-                        CONF_AGUI_ENDPOINT: endpoint,
-                        CONF_TIMEOUT: user_input.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
-                    },
+                    data=data,
                 )
 
         return self.async_show_form(
@@ -75,6 +87,11 @@ class AGUIAgentFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                             mode=selector.NumberSelectorMode.BOX,
                         ),
                     ),
+                    vol.Optional(CONF_BEARER_TOKEN): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD,
+                        ),
+                    ),
                 },
             ),
             description_placeholders={
@@ -83,15 +100,21 @@ class AGUIAgentFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def _test_endpoint(self, endpoint: str) -> None:
+    async def _test_endpoint(self, endpoint: str, bearer_token: str | None) -> None:
         """
         Test if the endpoint is reachable.
 
         This performs a simple HEAD request to verify connectivity.
         The actual AG-UI protocol validation happens at runtime.
         """
+        headers = {}
+        if bearer_token:
+            headers["Authorization"] = f"Bearer {bearer_token}"
+
         async with (
             aiohttp.ClientSession() as session,
-            session.head(endpoint, timeout=aiohttp.ClientTimeout(total=10)),
+            session.head(
+                endpoint, timeout=aiohttp.ClientTimeout(total=10), headers=headers
+            ),
         ):
             pass  # We just want to verify connectivity
