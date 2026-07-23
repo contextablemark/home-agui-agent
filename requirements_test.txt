@@ -1,5 +1,5 @@
 pytest>=9.1.1
 pytest-asyncio>=1.4.0
-pytest-homeassistant-custom-component>=0.13.345
+pytest-homeassistant-custom-component>=0.13.347
 pytest-socket>=0.8.0
 aiohttp>=3.14.1
