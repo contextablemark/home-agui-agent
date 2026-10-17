@@ -134,7 +134,7 @@ class AGUIClient:
         self._bearer_token = bearer_token
         self._pending_tool_calls: dict[str, PendingToolCall] = {}
 
-    async def run(  # noqa: PLR0913
+    async def run(  # noqa: PLR0913, PLR0917
         self,
         thread_id: str,
         run_id: str,
